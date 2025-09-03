@@ -36,3 +36,6 @@ Thumbs.db
 # Keep specific fonts if needed
 !font.ttf
 !NotoSerifKR-VariableFont_wght.ttf
+
+.env
+venv

@@ -1,6 +1,8 @@
 # app/main.rb
 # Scene Tree + Time-Gated Choices + Golden Dice (DragonRuby)
 # run: dragonruby mygame
+require_relative 'prompts'
+require_relative 'client'
 
 KFONT = "NotoSerifKR-VariableFont_wght.ttf"
 
@@ -271,6 +273,10 @@ def init args
   s.render_state ||= :situation_explanation # Default state
   s.situation_explanation_started_at ||= nil
   s.golden_dice_started_at ||= nil
+  s.llm_client ||= LLMClient.new
+  s.player ||= Player.new("플레이어", 20, "남자", "인간", Stats.new(10, 10, 10), [Trait.new("기습", "선빵필승을 가슴에 새기며 살아간다다" , "약함"), Trait.new("욕망", "목표를 달성하기 위해 얼마든지 희생할 수 있다" , "강함")], Trait.new("전우애", "동료를 소중히 여긴다" , "보통"), [Item.new("칼", "전설로 내려온 칼이다. 평범한 칼쳐럼 보이지만, 조건을 충족한다면..."), Item.new("천갑옷", "천으로 된 가벼운 갑옷이다."), Item.new("돈주머니", "꽤 값이 비싼 금화가 들어있다"), Item.new("치유포션", "가벼운 상처를 치유할 수 있다")], "")
+  s.npc ||= NPC.new("문지기", 33, "남자", "인간", guard_npc_description(), "문지기는 창을 겨누고 있다. 문지기는 플레이어를 의심하고 있다.", "")
+  s.situation ||= initial_situation_prompt()
 end
 
 def now_ms(args) = (args.tick_count * (1000.0 / 60)).to_i
@@ -282,7 +288,6 @@ end
 
 def current_node args
   return nil unless args.state.nodes && args.state.current_id
-  puts "current_node: #{args.state.current_id}"
   args.state.nodes[args.state.current_id]
 end
 
@@ -344,6 +349,8 @@ def apply_choice args, choice_id
   return unless scene && choice && in_window?(pick_ms, choice[:birth], choice[:death]) || choice_id == :C_NO_CHOICE
 
   puts "choice being applied"
+
+  s.llm_client.send_request args, "hi"
 
   ok = golden_dice_success_new?(pick_ms, scene[:time_limit], choice)  # use new formula
   next_id = ok ? choice[:success] : choice[:failure]
