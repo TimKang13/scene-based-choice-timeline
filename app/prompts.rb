@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # app/prompts.rb
 
 class Stats
@@ -247,8 +248,101 @@ def scene_generation_prompt
   PROMPT
 end
 
-def result_evaluation_prompt
-  ""
+def result_evaluation_prompt(player_choice, current_situation, player, npc)
+  <<~PROMPT
+    You are the Game Master (GM) evaluating the result of a player's choice in a text-based RPG.
+    
+    ## PLAYER'S CHOICE
+    #{player_choice}
+    
+    ## CURRENT SITUATION
+    #{current_situation}
+    
+    ## PLAYER CONTEXT
+    #{build_player_context(player)}
+    
+    ## NPC CONTEXT
+    #{build_npc_context(npc)}
+    
+    ## YOUR TASK
+    1. Evaluate the consequences of the player's choice
+    2. Consider how this choice affects the current situation
+    3. Update player and NPC memories based on the outcome
+    4. Generate a new situation that will lead to the next scene
+    5. Make the consequences meaningful and impactful
+    
+    ## OUTPUT FORMAT
+    Please respond in the following JSON format:
+    {
+      "result_description": "Detailed description of what happened as a result of the choice",
+      "player_memory_update": "How this experience affects the player's memory",
+      "npc_memory_update": "How this experience affects the NPC's memory",
+      "new_situation": "The new situation that emerges from this choice",
+      "consequences": {
+        "immediate": "What happens immediately",
+        "long_term": "Potential long-term effects"
+      },
+      "atmosphere_change": "How the overall mood/tension has changed"
+    }
+  PROMPT
+end
+
+def success_criteria_prompt(player_choice, current_situation, player, npc)
+  <<~PROMPT
+    You are the Game Master (GM) determining the success criteria for a player's choice in a text-based RPG using a 20-sided dice system.
+    
+    ## PLAYER'S CHOICE
+    #{player_choice}
+    
+    ## CURRENT SITUATION
+    #{current_situation}
+    
+    ## PLAYER CONTEXT
+    #{build_player_context(player)}
+    
+    ## NPC CONTEXT
+    #{build_npc_context(npc)}
+    
+    ## YOUR TASK
+    1. Analyze the difficulty of the player's choice based on the current situation
+    2. Consider the player's stats, traits, and current circumstances
+    3. Determine what number (or higher) on a 20-sided dice would represent success
+    4. Make the difficulty realistic and meaningful to the story
+    
+    ## DIFFICULTY GUIDELINES
+    - **Very Easy (1-5)**: Simple actions, favorable circumstances
+    - **Easy (6-10)**: Basic actions, slight challenges
+    - **Moderate (11-15)**: Standard actions, moderate challenges
+    - **Hard (16-18)**: Difficult actions, significant challenges
+    - **Very Hard (19-20)**: Extremely difficult actions, major obstacles
+    
+    ## FACTORS TO CONSIDER
+    - Player's relevant stats (physical, intelligence, speech)
+    - Player's traits and their intensity
+    - Current situation and environment
+    - NPC's current state and disposition
+    - Time pressure and urgency
+    - Previous actions and their consequences
+    
+    ## OUTPUT FORMAT
+    Please respond in the following JSON format:
+    {
+      "success_threshold": 15,
+      "difficulty_level": "Hard",
+      "reasoning": "This action requires convincing a suspicious guard who is already on high alert. The player's speech skill and current tense atmosphere make this challenging.",
+      "factors_considered": {
+        "player_stats": "Speech 10/20 - moderate",
+        "player_traits": "욕망 (강함) - may help with determination",
+        "situation": "Guard is suspicious and armed",
+        "environment": "High tension, time pressure"
+      }
+    }
+    
+    ## IMPORTANT
+    - success_threshold must be between 1 and 20
+    - Make the difficulty realistic and story-appropriate
+    - Consider all relevant factors in your reasoning
+  PROMPT
 end
 
 def starting_player_memory()
@@ -307,4 +401,54 @@ def guard_npc_description()
   덩치가 크다.
   플레이어가 물러나지 않는다면 창으로 공격할 준비가 되어있다.
   "
+end
+
+def outcome_prompt(dice_result, current_situation, player, npc)
+  <<~PROMPT
+    You are the Game Master (GM) generating the outcome of a player's action in a text-based RPG based on a D20 dice roll result.
+    ## DICE RESULT
+    - Player's choice: #{dice_result[:choice]}
+    - Dice roll: #{dice_result[:roll]}/20
+    - Success threshold: #{dice_result[:threshold]} or higher
+    - Result: #{dice_result[:success] ? 'SUCCESS' : 'FAILURE'}
+    
+    ## CURRENT SITUATION
+    #{current_situation}
+    
+    ## PLAYER CONTEXT
+    #{build_player_context(player)}
+    
+    ## NPC CONTEXT
+    #{build_npc_context(npc)}
+    
+    ## YOUR TASK
+    1. Generate a detailed outcome description based on the dice result
+    2. Consider how success/failure affects the current situation
+    3. Update player and NPC memories based on the outcome
+    4. Generate a new situation that emerges from this outcome
+    5. Make the consequences meaningful and impactful to the story
+    
+    ## SUCCESS vs FAILURE GUIDELINES
+    - **SUCCESS**: The player's action achieves its intended goal, but may have unexpected consequences
+    - **FAILURE**: The player's action doesn't achieve its goal, but may open new opportunities or create interesting complications
+    
+    ## OUTPUT FORMAT
+    Please respond in the following JSON format:
+    {
+      "outcome_description": "Detailed description of what happened as a result of the dice roll",
+      "consequences": {
+        "immediate": "What happens immediately",
+        "long_term": "Potential long-term effects or implications"
+      },
+      "atmosphere_change": "How the overall mood/tension has changed",
+      "player_memory_update": "How this experience affects the player's memory and understanding",
+      "npc_memory_update": "How this experience affects the NPC's memory and disposition"
+    }
+    
+    ## IMPORTANT
+    - Make the outcome realistic and story-appropriate
+    - Consider the player's traits and how they might react to success/failure
+    - The new situation should naturally flow from the outcome
+    - Keep the story engaging and maintain narrative tension
+  PROMPT
 end
