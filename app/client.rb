@@ -9,15 +9,6 @@ class LLMClient
 
   def send_request(args, prompt)
     # Try to fix encoding issues - DragonRuby compatible approach
-    begin
-      if prompt.respond_to?(:force_encoding)
-        prompt = prompt.force_encoding('UTF-8')
-      end
-    rescue => e
-      puts "Encoding fix failed: #{e.message}"
-    end
-
-   prompt = "hi"
     
     puts "Sending request to #{@base_url}#{@endpoint}"
     puts "Prompt type: #{prompt.class}"
@@ -41,6 +32,9 @@ class LLMClient
 
   def handle_response(args)
     r = args.state.llm_result
+    puts "DEBUG: llm_result: #{r.inspect}"
+    puts "DEBUG: llm_result complete?: #{r && r[:complete]}"
+    
     return nil unless r && r[:complete]
 
     code = r[:http_response_code]
@@ -57,9 +51,43 @@ class LLMClient
 
     # Your FastAPI returns {"response":"..."}
     if body.is_a?(String)
-      # naive extraction without json.rb
-      if (m = body.match(/"response"\s*:\s*"([^"]*)"/))
-        m[1]
+      # DragonRuby-compatible string parsing
+      if body.include?('"response"')
+        # Find the start of the response value
+        start_idx = body.index('"response"')
+        if start_idx
+          # Find the colon after "response"
+          colon_idx = body.index(':', start_idx)
+          if colon_idx
+            # Find the opening quote after the colon
+            quote_start = body.index('"', colon_idx)
+            if quote_start
+              # Find the closing quote (handle escaped quotes)
+              quote_end = quote_start + 1
+              while quote_end < body.length
+                if body[quote_end] == '\\' && quote_end + 1 < body.length
+                  quote_end += 2  # Skip escaped character
+                elsif body[quote_end] == '"'
+                  break
+                else
+                  quote_end += 1
+                end
+              end
+              if quote_end < body.length
+                # Extract the response content
+                body[quote_start + 1...quote_end]
+              else
+                body
+              end
+            else
+              body
+            end
+          else
+            body
+          end
+        else
+          body
+        end
       else
         body
       end

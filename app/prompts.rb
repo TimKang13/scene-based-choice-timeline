@@ -137,9 +137,9 @@ def build_player_context(player)
     Species: #{player.species}
     
     Stats:
-    - Physical: #{player.stats.physical}/20
+    - Body/Physical: #{player.stats.physical}/20
     - Intelligence: #{player.stats.intelligence}/20  
-    - Speech: #{player.stats.speech}/20
+    - Speech/Charisma: #{player.stats.speech}/20
     
     Traits: #{player.traits.map { |t| "#{t.name} (#{t.intensity})" }.join(", ")}
   CONTEXT
@@ -158,21 +158,21 @@ end
 
 def initial_situation_prompt
   <<~SITUATION
-    성문 앞에서 긴장된 대치 상황이 벌어지고 있다.
+    There is a tense standoff at the castle gate.
     
-    한 명의 여행자(플레이어)가 성안으로 들어가려고 하지만, 문지기가 이를 막고 있다.
-    문지기는 신분증이나 입성 허가서를 요구했지만, 여행자는 그런 것을 가지고 있지 않다.
+    A traveler (player) wants to enter the castle, but a guard is blocking them.
+    The guard demands identification or entry permit, but the traveler doesn't have them.
     
-    여행자는 자신이 무해하다고 강조했지만, 문지기의 질문들에 대해 모호하게 대답했다.
-    특히 "어디서 왔는지", "성안에서 무엇을 하려는지"에 대한 답변이 불분명했다.
+    The traveler emphasizes they are harmless, but gives vague answers to the guard's questions.
+    Particularly, their answers about "where they came from" and "what they want to do in the castle" were unclear.
     
-    문지기는 이런 모호한 행동에 더욱 의심을 품게 되었고, 창을 들어 방어 자세를 취했다.
-    여행자는 놀란 표정을 지었지만, 여전히 물러서지 않았다.
+    The guard becomes more suspicious of this vague behavior and raises their spear in defense.
+    The traveler looks surprised but still doesn't back down.
     
-    현재 상황은 매우 긴장되어 있으며, 문지기가 공격할 준비가 되어 있다.
-    여행자도 성안에 들어가야 하는 이유가 있어서 물러설 수 없는 상황이다.
+    The current situation is very tense, and the guard is ready to attack.
+    The traveler cannot back down because they have urgent business inside the castle.
     
-    이 대치 상황은 언제든지 폭력으로 이어질 수 있는 위험한 상태이다.
+    This standoff could lead to violence at any moment.
   SITUATION
 end
 
@@ -181,13 +181,13 @@ def initial_player_prompt
 end
 
 def initial_npc_prompt
-  "플레이어를 의심하고 있다.
-  플레이어가 물러서지 않는다면 무력을 쓸 준비가 되어있다.
+  "The guard is suspicious of the player.
+  If the player doesn't back down, the guard is ready to use force.
   "
 end
 
 def dm_character_prompt
-  "당신은 TRPG 게임의 DM 입니다. 당신은 세계관 안에서 몰입감 있게 게임의 진행을 책임지고, 맛깔나게 상황을 설명합니다.
+  "You are the DM for a TRPG game. You are responsible for immersive game progression within the world and vividly describing situations.
   You have witty sarcastic humor and are a great storyteller.
   You will be the player's closest ally and their deepest nightmare at the same time.
   The player depends on YOU to make creative and entertaining stories.
@@ -203,6 +203,13 @@ def scene_generation_prompt
   <<~PROMPT
     Given the current situation and narrative, generate a new SCENE with meaningful choices for the player.
 
+
+    ## SCENE STRUCTURE
+    - SCENE: A single decision point with duration 5-20 seconds
+    - STATE: A micro situation within the scene (usually 1 state for simple scenes)
+    - CHOICE: Player actions with timing windows
+
+
     SCENE is like one turn of the game.
     SCENE should be a single decision point for the player.
     SCENE has a duration, usually 5-20 seconds.
@@ -217,34 +224,95 @@ def scene_generation_prompt
     CHOICE can span multiple STATEs, if the CHOICE is valid for multiple STATEs.
     CHOICE is a possible action the player can take, in response to the STATE and the overall situation
 
-    ## 임무
-    1. 플레이어를 위한 의미있는 선택지 3-5개를 생성하시오
-    2. 각 선택지는 명확한 결과와 플레이어의 성격을 반영해야 합니다
-    3. 플레이어의 스탯과 특성을 고려하여 선택지를 설계하시오
-    4. 스토리를 진행시키고 긴장감을 조성하는 선택지를 만드시오
-    5. 현재 상황에 적절한 선택지인지 확인하라
-    6. 선택지는 꼭 한글로 작성하라
+
+    ## REQUIREMENTS
+    1. Create 3-5 creative, intuitive choices
+    2. **CRITICAL**: Player has only 5 seconds to read state text, understand choices, and decide
+    3. State text must be extremely concise - maximum 10-15 words
+    4. Choice text must be under 5 words - direct action verbs preferred
+    5. Consider player stats (Physical, Intelligence, Speech) and traits
+    6. Make choices advance the story and build tension
+    7. Ensure timing makes sense for the situation
+    8. Make several states, for example, a scene might have states at 0s (initial situation), 3s (escalation), and 6s (climax) to show how the situation changes over time
+    
 
     ## OUTPUT FORMAT
-    Please respond in the following JSON format:
+    Respond with this EXACT JSON structure:
     {
-      "scene_description": "Brief description of the new scene",
-      "duration": "Estimated duration in seconds",
+      "id": "unique_scene_id",
+      "duration": 15,
       "states": [
         {
-          "description": "State description",
-          "lifespan": "Duration in seconds",
-          "choices": [
-            {
-              "text": "Choice description",
-              "consequence": "What this choice might lead to",
-              "required_stats": {"physical": 5, "intelligence": 3},
-              "trait_influence": "How player traits affect this choice"
-            }
-          ]
+          "id": "state_1",
+          "at": 0,
+          "duration": 5,
+          "text": "Guard blocks your path. Spear raised. Demands ID."
+        },
+        {
+          "id": "state_2",
+          "at": 5,
+          "duration": 5,
+          "text": "Guard steps closer. Final warning. Spear tip glints."
+        },
+        {
+          "id": "state_3",
+          "at": 10,
+          "duration": 5,
+          "text": "Guard lunges! Spear thrusts toward you. NOW!"
         }
-      ]
+      ],
+      "choices": [
+        {
+          "id": "choice_1",
+          "text": "Try to talk your way past",
+          "state_ids": ["state_1", "state_2"]
+        },
+        {
+          "id": "choice_2",
+          "text": "Run away quickly",
+          "state_ids": ["state_2", "state_3"]
+        },
+        {
+          "id": "choice_3",
+          "text": "Fight back",
+          "state_ids": ["state_1", "state_2", "state_3"]
+        },
+        {
+          "id": "choice_4",
+          "text": "Dodge the spear",
+          "state_ids": ["state_3"]
+        }
+      ],
+      "reading_time_estimate": 6,
+      "decision_deadline": 15
     }
+    
+    ## STATE GUIDELINES
+    - Each state should represent a distinct phase of the scene
+    - States should build tension or change the situation meaningfully
+    - Use "at" field to specify when each state begins (in seconds)
+    - **CRITICAL**: State text must be extremely brief - 10-15 words maximum
+    - Use short, punchy sentences. No flowery descriptions.
+    - Focus on immediate threats, actions, and consequences
+    - States no longer contain choices directly - choices are assigned via state_ids
+    - Example state progression:
+      state 1 (0s): "Guard blocks path. Spear raised. Demands ID."
+      state 2 (5s): "Guard steps closer. Final warning. Spear tip glints."
+      state 3 (10s): "Guard lunges! Spear thrusts toward you. NOW!"
+
+    ## CHOICE GUIDELINES
+    - **CRITICAL**: Choice text must be under 5 words - direct action verbs preferred
+    - Make each choice distinct and meaningful
+    - Consider player's traits and stats
+    - Each choice should have clear risk/reward dynamics
+    - **CRITICAL**: Choices are defined at the scene level and assigned to states via state_ids
+    - Choices can span multiple states for better persistence and player agency
+    - Each choice should be contextually appropriate for ALL states it's assigned to
+    - Some choices may only be available in specific states (single state_ids)
+    - Other choices may persist across multiple states for ongoing actions
+    - With choice, you can use items as well.
+    - Examples: "Fight back", "Run away", "Try to talk", "Use item", "Dodge attack"
+    Create creative and engaging choices that make sense across their assigned states.
   PROMPT
 end
 
@@ -347,59 +415,58 @@ end
 
 def starting_player_memory()
   <<~MEMORY
-    플레이어는 성안에 들어가야 하는 긴급한 상황이다. 
+    The player is in an urgent situation where they must enter the castle.
     
-    성 안의 한 장군을 감시하고 의심스러운 행동을 보고하라는 의뢰를 받았다. 
-    이는 매우 중요한 임무이며, 성안에 들어가지 못하면 임무를 수행할 수 없다.
+    They received a request to monitor a general inside the castle and report suspicious behavior.
+    This is a very important mission, and they cannot complete it without entering the castle.
     
-    약 30분 전, 성문 앞에 도착했을 때 문지기가 자신을 막아섰다. 
-    문지기는 신분증이나 입성 허가서를 요구했지만, 플레이어는 그런 것을 가지고 있지 않다.
+    About 30 minutes ago, when they arrived at the castle gate, a guard blocked them.
+    The guard demanded identification or entry permit, but the player doesn't have them.
     
-    플레이어는 자신이 무해하다고 강조했지만, 문지기의 질문들에 대해 솔직하게 답변할 수 없었다. 
-    "어디서 왔는지", "성안에서 무엇을 하려는지"에 대한 질문에 대해서는 
-    진실을 말할 수 없는 사정이 있어서 모호하게 대답할 수밖에 없었다.
+    The player emphasized they are harmless, but couldn't answer the guard's questions honestly.
+    For questions about "where they came from" and "what they want to do in the castle",
+    they had to give vague answers due to circumstances where they couldn't tell the truth.
     
-    문지기는 이런 모호한 답변에 더욱 의심을 품는 것 같았다. 
-    플레이어는 문지기가 규율을 중시하는 사람이라는 것을 느낄 수 있었다.
+    The guard seemed to become more suspicious of these vague answers.
+    The player could sense that the guard values discipline and rules.
     
-    계속해서 입성을 요구했지만, 문지기는 창을 들어 방어 자세를 취했다. 
-    플레이어는 이 상황에 놀랐지만, 성안에 들어가야 하는 이유가 있어서 물러설 수 없다.
+    They continued to request entry, but the guard raised their spear in defense.
+    The player was surprised by this situation, but cannot back down because they have urgent business inside.
     
-    현재 상황은 매우 긴장되어 있으며, 문지기가 공격할 준비가 되어 있는 것 같다. 
-    플레이어는 어떻게든 성안에 들어가야 하는데, 문지기를 설득하거나 다른 방법을 찾아야 한다.
+    The current situation is very tense, and the guard seems ready to attack.
+    The player must somehow enter the castle, either by convincing the guard or finding another way.
     
-    이 임무는 성공해야 하며, 실패할 경우 큰 문제가 생길 수 있다.
+    This mission must succeed, or there could be serious consequences.
   MEMORY
 end
 
 def starting_guard_npc_memory()
   <<~MEMORY
-    문지기는 5시간동안 성안을 지키고 있다. 
+    The guard has been protecting the castle for 5 hours.
     
-    약 30분 전, 한 명의 여행자가 성문 앞에 나타났다. 그 여행자는 성안으로 들어가고 싶다고 했지만, 
-    문지기가 신분증이나 입성 허가서를 요구하자 명확한 답변을 하지 못했다. 
+    About 30 minutes ago, a traveler appeared at the castle gate. The traveler said they wanted to enter the castle,
+    but when the guard demanded identification or entry permit, they couldn't give clear answers.
     
-    여행자는 자신이 무해하다고 강조했지만, 문지기의 질문에 대해 모호하게 대답하거나 
-    회피하려는 모습을 보였다. 특히 "어디서 왔는지", "성안에서 무엇을 하려는지"에 대한 
-    답변이 불분명했다.
+    The traveler emphasized they are harmless, but gave vague answers or tried to avoid the guard's questions.
+    Particularly, their answers about "where they came from" and "what they want to do in the castle" were unclear.
     
-    문지기는 이런 모호한 행동에 더욱 의심을 품게 되었다. 
-    평소 규율을 중시하는 문지기로서, 명확하지 않은 신원의 사람을 성안에 들이는 것은 
-    자신의 직무에 대한 배신이라고 생각한다.
+    The guard became more suspicious of this vague behavior.
+    As a guard who values discipline, allowing someone with unclear identity into the castle
+    would be a betrayal of their duty.
     
-    여행자가 계속해서 입성을 요구하자, 문지기는 창을 들어 방어 자세를 취했다. 
-    여행자는 놀란 표정을 지었지만, 여전히 물러서지 않았다.
+    When the traveler continued to request entry, the guard raised their spear in defense.
+    The traveler looked surprised but still didn't back down.
     
-    현재 상황은 매우 긴장된 상태이며, 문지기는 여행자가 물러서지 않는다면 
-    무력을 사용할 준비가 되어있다.
+    The current situation is very tense, and the guard is ready to use force
+    if the traveler doesn't back down.
   MEMORY
 end
 
 def guard_npc_description()
-  "과묵한 성격이다. 규율을 중시하고 쉽게 속지 않는다.
-  창을 무기로 가지고 있고, 갑옷을 입고 있다.
-  덩치가 크다.
-  플레이어가 물러나지 않는다면 창으로 공격할 준비가 되어있다.
+  "The guard has a taciturn personality. They value discipline and are not easily fooled.
+  They carry a spear as a weapon and wear armor.
+  They are large in build.
+  If the player doesn't back down, they are ready to attack with their spear.
   "
 end
 

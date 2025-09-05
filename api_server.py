@@ -43,12 +43,13 @@ async def chat(request: ChatRequest):
     try:
         print(f"Received request: model={request.model}, input={request.input}, effort={request.effort}")
         
-        response = client.responses.create(
+        response = client.responses.parse(
             model=request.model,
             input=request.input,
             reasoning={
                 "effort": request.effort
-            }
+            },
+            text_format=Scene
         )
 
         result = {"response": response.output_text}

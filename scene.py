@@ -9,19 +9,7 @@ from pydantic import BaseModel, Field, model_validator
 class Choice(BaseModel):
     id: str
     text: str
-    
-    # State-specific timing window
-    birth: float = Field(..., ge=0.0)     # seconds since state start (inclusive)
-    death: float = Field(..., ge=0.0)     # seconds since state start (inclusive)
-    
-    # Optional per-state overrides
-    override_text: Optional[str] = None
-    
-    @model_validator(mode="after")
-    def _check_window(self):
-        if self.death < self.birth:
-            raise ValueError("Choice.death must be >= birth")
-        return self
+    state_ids: List[str]    
 
 
 # ---------------------------------------------------------------------------
@@ -32,7 +20,6 @@ class State(BaseModel):
     at: float = Field(..., ge=0.0)         # scene-relative start (seconds)
     duration: float = Field(..., gt=0.0)
     text: str
-    choices: List[Choice] = Field(default_factory=list)
 
     @property
     def end(self) -> float:
@@ -46,6 +33,7 @@ class Scene(BaseModel):
     id: str
     duration: float = Field(..., ge=0.5)          # typically 5–20s
     states: List[State]
+    choices: List[Choice]
 
     # optional UX
     reading_time_estimate: Optional[float] = None
