@@ -9,7 +9,8 @@ from pydantic import BaseModel, Field, model_validator
 class Choice(BaseModel):
     id: str
     text: str
-    state_ids: List[str]    
+    state_ids: List[str]   
+    time_to_read: float = Field(..., ge=0.0)
 
 
 # ---------------------------------------------------------------------------
@@ -20,6 +21,7 @@ class State(BaseModel):
     at: float = Field(..., ge=0.0)         # scene-relative start (seconds)
     duration: float = Field(..., gt=0.0)
     text: str
+    time_to_read: float = Field(..., ge=0.0)
 
     @property
     def end(self) -> float:
@@ -37,7 +39,6 @@ class Scene(BaseModel):
 
     # optional UX
     reading_time_estimate: Optional[float] = None
-    decision_deadline: Optional[float] = None
 
     @model_validator(mode="after")
     def _validate(self):
@@ -54,15 +55,12 @@ class Scene(BaseModel):
             if st.at < 0 or st.end > dur + 1e-6:
                 raise ValueError(f"State '{st.id}' exceeds scene duration")
 
-            # each choice window must lie within the state
-            for choice in st.choices:
-                if choice.birth < 0 or choice.death > st.duration + 1e-6:
-                    raise ValueError(
-                        f"Choice window for '{choice.id}' must be inside state '{st.id}' duration"
-                    )
-
-        if self.decision_deadline is not None and self.decision_deadline > dur:
-            raise ValueError("decision_deadline cannot exceed scene duration")
+        # validate that all choice state_ids reference existing states
+        state_ids = {st.id for st in self.states}
+        for choice in self.choices:
+            for state_id in choice.state_ids:
+                if state_id not in state_ids:
+                    raise ValueError(f"Choice '{choice.id}' references non-existent state '{state_id}'")
 
         return self
 
@@ -96,3 +94,16 @@ class Scene(BaseModel):
 
 # Note: Golden dice probability is now determined by LLM after choice is made
 # based on: choice made, timing, and current situation
+
+
+class Dice(BaseModel):
+    big_success_threshold: int
+    success_threshold: int
+    small_failure_threshold: int
+    reasoning: str
+
+class Outcome(BaseModel):
+    outcome_description: str
+    updated_situation: str
+    updated_player_memory: str
+    updated_npc_memory: str

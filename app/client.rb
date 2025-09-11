@@ -4,25 +4,58 @@
 class LLMClient
   def initialize
     @base_url = "http://localhost:8000"
-    @endpoint = "/chat"
   end
 
-  def send_request(args, prompt)
+  # Minimal JSON string escaper compatible with DragonRuby (no encode/gsub)
+  def json_escape(str)
+    s = str.to_s
+    out = ""
+    i = 0
+    while i < s.length
+      ch = s[i]
+      # Fallback per-char access; handle common control chars and quotes
+      if ch == '"'
+        out << '\\"'
+      elsif ch == '\\'
+        out << '\\\\'
+      elsif ch == "\n"
+        out << '\\n'
+      elsif ch == "\r"
+        out << '\\r'
+      elsif ch == "\t"
+        out << '\\t'
+      else
+        # Control chars < 0x20: escape as \u00XX when possible
+        code = ch.ord rescue nil
+        if code && code < 32
+          hex = code.to_s(16)
+          out << "\\u" << ("0" * (4 - hex.length)) << hex
+        else
+          out << ch
+        end
+      end
+      i += 1
+    end
+    out
+  end
+
+  def send_request(args, endpoint, prompt)
     # Try to fix encoding issues - DragonRuby compatible approach
     
-    puts "Sending request to #{@base_url}#{@endpoint}"
+    puts "Sending request to #{@base_url}#{endpoint}"
     puts "Prompt type: #{prompt.class}"
     puts "Prompt encoding: #{prompt.respond_to?(:encoding) ? prompt.encoding : 'unknown'}"
     puts "Prompt length: #{prompt.length}"
     raise ArgumentError, "prompt must be a String, got #{prompt.class}" unless prompt.is_a?(String)
-    url = "#{@base_url}#{@endpoint}"
+    url = "#{@base_url}#{endpoint}"
     
     # Build the JSON string manually (no json.rb needed)
-    body_json = %({"model":"gpt-5-mini","input":#{prompt.to_s.inspect},"effort":"minimal"})
+    escaped_input = json_escape(prompt)
+    body_json = %({"model":"gpt-5-mini","input":"#{escaped_input}","effort":"minimal"})
     
     headers = [
       "Content-Type: application/json",
-      "Content-Length: #{body_json.length}"
+      "Content-Length: #{body_json.bytesize}"
     ]
 
     # Use http_post_body instead of http_post

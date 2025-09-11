@@ -92,7 +92,7 @@ class NPC
 end
 
 
-def situation_prompt(situation, player, npc)
+def context_prompt(situation, player, npc)
   # Build comprehensive context for the LLM
   context = {
     current_situation: situation,
@@ -116,16 +116,6 @@ def situation_prompt(situation, player, npc)
 
     ## PLAYER MEMORY
     #{context[:player_memory].empty? ? "No recent memories" : context[:player_memory]}
-
-    ## YOUR TASK
-    1. Describe the current scene vividly and atmospherically
-    2. Consider the player's traits and stats when describing their capabilities and feelings
-    3. Consider the NPC's descriptions and current state
-    4. Make the narrative engaging and immersive
-    5. Set the mood and atmosphere for the scene
-
-    ## OUTPUT FORMAT
-    Please respond with a vivid narrative description of the current scene, considering the character's perspective and the overall atmosphere.
   PROMPT
 end
 
@@ -154,6 +144,12 @@ def build_npc_context(npc)
     
     Description: #{npc.descriptions.empty? ? "No detailed description available" : npc.descriptions}
   CONTEXT
+end
+
+def initial_outcome_prompt 
+  <<~OUTCOME
+    There is still a tense standoff at the castle gate.
+  OUTCOME
 end
 
 def initial_situation_prompt
@@ -219,14 +215,16 @@ def scene_generation_prompt
     STATE represents a single window of action within a SCENE.
     STATE changes every few seconds, depending on the SCENE to be generated.
     a SCENE can consist of a single STATE, if the SCENE can be explained in a single window of action.
+    
+    IMPORTANT SEPARATION:
+    - STATES = NPC/environment timeline if the player stays frozen (no player actions).
+    - CHOICES = Player actions that can interrupt or redirect that timeline.
 
-    a STATE can have multiple CHOICEs, each having their own lifespans.
-    CHOICE can span multiple STATEs, if the CHOICE is valid for multiple STATEs.
+    CHOICE can belong to multiple STATEs, if the CHOICE is valid for multiple STATEs.
     CHOICE is a possible action the player can take, in response to the STATE and the overall situation
 
-
     ## REQUIREMENTS
-    1. Create 3-5 creative, intuitive choices
+    1. Create 3-7 creative, intuitive choices
     2. **CRITICAL**: Player has only 5 seconds to read state text, understand choices, and decide
     3. State text must be extremely concise - maximum 10-15 words
     4. Choice text must be under 5 words - direct action verbs preferred
@@ -236,62 +234,81 @@ def scene_generation_prompt
     8. Make several states, for example, a scene might have states at 0s (initial situation), 3s (escalation), and 6s (climax) to show how the situation changes over time
     
 
+    ## READING TIME RULES
+    - At the start of EACH state, the scene timer PAUSES for a brief reading countdown.
+    - total_time_to_read(state) = state.time_to_read + sum(choice.time_to_read for choices visible in that state)
+    - During this countdown, choices are not selectable; after it ends, the scene resumes.
+
     ## OUTPUT FORMAT
-    Respond with this EXACT JSON structure:
+    Respond with this EXACT JSON structure (include time_to_read fields):
     {
       "id": "unique_scene_id",
-      "duration": 15,
+      "duration": time it takes for the scene to play out,
       "states": [
         {
           "id": "state_1",
           "at": 0,
-          "duration": 5,
-          "text": "Guard blocks your path. Spear raised. Demands ID."
+          "duration": duration for this state,
+          "text": "first state text",
+          "time_to_read": 2.0
         },
         {
           "id": "state_2",
-          "at": 5,
-          "duration": 5,
-          "text": "Guard steps closer. Final warning. Spear tip glints."
+          "at": where this state starts,
+          "duration": duration for this state,
+          "text": "second state, as result of inaction of player. ex) getting impatient",
+          "time_to_read": 1.8
         },
         {
           "id": "state_3",
-          "at": 10,
-          "duration": 5,
-          "text": "Guard lunges! Spear thrusts toward you. NOW!"
+          "at": where this state starts,
+          "duration": duration for this state,
+          "text": "third state, as result of inaction of player. ex) getting impatient",
+          "time_to_read": 2.6
         }
       ],
       "choices": [
         {
           "id": "choice_1",
           "text": "Try to talk your way past",
-          "state_ids": ["state_1", "state_2"]
+          "state_ids": ["state_1", "state_2"],
+          "time_to_read": 0.6
         },
         {
           "id": "choice_2",
           "text": "Run away quickly",
-          "state_ids": ["state_2", "state_3"]
+          "state_ids": ["state_2", "state_3"],
+          "time_to_read": 0.5
         },
         {
           "id": "choice_3",
           "text": "Fight back",
-          "state_ids": ["state_1", "state_2", "state_3"]
+          "state_ids": ["state_1", "state_2", "state_3"],
+          "time_to_read": 0.4
         },
         {
           "id": "choice_4",
           "text": "Dodge the spear",
-          "state_ids": ["state_3"]
+          "state_ids": ["state_3"],
+          "time_to_read": 0.5
         }
       ],
       "reading_time_estimate": 6,
-      "decision_deadline": 15
     }
     
     ## STATE GUIDELINES
     - Each state should represent a distinct phase of the scene
     - States should build tension or change the situation meaningfully
     - Use "at" field to specify when each state begins (in seconds)
-    - **CRITICAL**: State text must be extremely brief - 10-15 words maximum
+    - **CRITICAL**: State text must be brief but action packed - 10-15 words maximum
+    - **CRITICAL**: Following state assumes that the player did not act yet to the previous state
+    - **ABSOLUTE RULE**: States describe ONLY NPC or environment actions. No player actions.
+      - Prohibited in state text: "you", "your", "player", second-person imperatives (e.g., "Dodge", "Grab", "Speak"), or any verb implying player action.
+      - Use third-person subjects like "Guard", "Crowd", "Gate", "Spear", "Wind", "Rain".
+      - Think of states as the "background reel" that plays if the player does nothing.
+      - Bad (NOT allowed): "You step back. You ready your blade."
+      - Good (Allowed): "Guard steps in. Spear lifts higher. Crowd hushes."
+
     - Use short, punchy sentences. No flowery descriptions.
     - Focus on immediate threats, actions, and consequences
     - States no longer contain choices directly - choices are assigned via state_ids
@@ -300,19 +317,24 @@ def scene_generation_prompt
       state 2 (5s): "Guard steps closer. Final warning. Spear tip glints."
       state 3 (10s): "Guard lunges! Spear thrusts toward you. NOW!"
 
+    ### SELF-CHECK BEFORE OUTPUT
+    For each state.text, verify ALL are true; if any fail, rewrite before returning JSON:
+    - Contains NO "you", "your", or "player".
+    - Contains NO imperative phrasing targeting the player (e.g., "Dodge", "Run", "Speak").
+    - Subjects are NPC/environmental; actions proceed even if the player is frozen.
+
     ## CHOICE GUIDELINES
-    - **CRITICAL**: Choice text must be under 5 words - direct action verbs preferred
+    - **CRITICAL**: Choice text must be under 5 words - direct action verbs preferred. be specific, succint, packed with action
     - Make each choice distinct and meaningful
     - Consider player's traits and stats
     - Each choice should have clear risk/reward dynamics
     - **CRITICAL**: Choices are defined at the scene level and assigned to states via state_ids
     - Choices can span multiple states for better persistence and player agency
     - Each choice should be contextually appropriate for ALL states it's assigned to
-    - Some choices may only be available in specific states (single state_ids)
-    - Other choices may persist across multiple states for ongoing actions
+    - Certain specific choices may only be available in specific states (single state_ids)
     - With choice, you can use items as well.
-    - Examples: "Fight back", "Run away", "Try to talk", "Use item", "Dodge attack"
     Create creative and engaging choices that make sense across their assigned states.
+    You are the DM! Make absurd and unorthodox choices to blow people's minds.
   PROMPT
 end
 
@@ -339,23 +361,18 @@ def result_evaluation_prompt(player_choice, current_situation, player, npc)
     4. Generate a new situation that will lead to the next scene
     5. Make the consequences meaningful and impactful
     
-    ## OUTPUT FORMAT
-    Please respond in the following JSON format:
+    ## OUTPUT FORMAT (JSON)
+    Respond with ONLY this JSON object (no prose):
     {
-      "result_description": "Detailed description of what happened as a result of the choice",
-      "player_memory_update": "How this experience affects the player's memory",
-      "npc_memory_update": "How this experience affects the NPC's memory",
-      "new_situation": "The new situation that emerges from this choice",
-      "consequences": {
-        "immediate": "What happens immediately",
-        "long_term": "Potential long-term effects"
-      },
-      "atmosphere_change": "How the overall mood/tension has changed"
+      "outcome_description": "Detailed description of what happened as a result of the choice",
+      "updated_player_memory": "How this experience affects the player's memory",
+      "updated_npc_memory": "How this experience affects the NPC's memory",
+      "updated_situation": "The new situation that emerges from this choice"
     }
   PROMPT
 end
 
-def success_criteria_prompt(player_choice, current_situation, player, npc)
+def success_criteria_prompt(player_choice, current_situation, player, npc, decision_time_seconds)
   <<~PROMPT
     You are the Game Master (GM) determining the success criteria for a player's choice in a text-based RPG using a 20-sided dice system.
     
@@ -371,11 +388,14 @@ def success_criteria_prompt(player_choice, current_situation, player, npc)
     ## NPC CONTEXT
     #{build_npc_context(npc)}
     
+    ## DECISION TIME (SECONDS)
+    #{decision_time_seconds}
+    
     ## YOUR TASK
     1. Analyze the difficulty of the player's choice based on the current situation
-    2. Consider the player's stats, traits, and current circumstances
-    3. Determine what number (or higher) on a 20-sided dice would represent success
-    4. Make the difficulty realistic and meaningful to the story
+    2. Consider the player's stats, traits, current circumstances, and DECISION TIME as a factor
+    3. Produce thresholds for the following outcomes: big success, success, small failure, big failure
+    4. Make thresholds realistic and meaningful to the story
     
     ## DIFFICULTY GUIDELINES
     - **Very Easy (1-5)**: Simple actions, favorable circumstances
@@ -389,27 +409,27 @@ def success_criteria_prompt(player_choice, current_situation, player, npc)
     - Player's traits and their intensity
     - Current situation and environment
     - NPC's current state and disposition
-    - Time pressure and urgency
+    - Time pressure and urgency, and player's decision time (slower decisions under urgency should tend to increase difficulty; split-second choices in reflex contexts may reduce difficulty for physical actions)
     - Previous actions and their consequences
     
-    ## OUTPUT FORMAT
-    Please respond in the following JSON format:
+    ## OUTPUT FORMAT (JSON)
+    Respond with ONLY this JSON object (no prose):
     {
-      "success_threshold": 15,
-      "difficulty_level": "Hard",
-      "reasoning": "This action requires convincing a suspicious guard who is already on high alert. The player's speech skill and current tense atmosphere make this challenging.",
-      "factors_considered": {
-        "player_stats": "Speech 10/20 - moderate",
-        "player_traits": "욕망 (강함) - may help with determination",
-        "situation": "Guard is suspicious and armed",
-        "environment": "High tension, time pressure"
-      }
+      "big_success_threshold": ,
+      "success_threshold": ,
+      "small_failure_threshold": ,
+      "reasoning": "Brief rationale referencing decision time, stats/traits, and situation."
     }
     
     ## IMPORTANT
-    - success_threshold must be between 1 and 20
-    - Make the difficulty realistic and story-appropriate
-    - Consider all relevant factors in your reasoning
+    - All thresholds are integers in [1, 20].
+    - Interpret outcomes as:
+      - roll >= big_success_threshold => huge success (very rare, lottery-like)
+      - else if roll >= success_threshold => success
+      - else if roll < small_failure_threshold => big failure (very rare, catastrophe)
+      - else => failure
+    - Enforce sensible ordering: 20 >= big_success_threshold >= success_threshold >= 1 and 1 <= small_failure_threshold <= success_threshold.
+    - Weigh decision_time_seconds: under strong urgency, longer decision times should trend toward higher success_threshold and higher chance of big failure (by raising thresholds or lowering small_failure_threshold appropriately).
   PROMPT
 end
 
@@ -476,8 +496,7 @@ def outcome_prompt(dice_result, current_situation, player, npc)
     ## DICE RESULT
     - Player's choice: #{dice_result[:choice]}
     - Dice roll: #{dice_result[:roll]}/20
-    - Success threshold: #{dice_result[:threshold]} or higher
-    - Result: #{dice_result[:success] ? 'SUCCESS' : 'FAILURE'}
+    - Category: #{dice_result[:category]}
     
     ## CURRENT SITUATION
     #{current_situation}
@@ -485,11 +504,17 @@ def outcome_prompt(dice_result, current_situation, player, npc)
     ## PLAYER CONTEXT
     #{build_player_context(player)}
     
+    ## PLAYER MEMORY (CURRENT)
+    #{player.memory}
+    
     ## NPC CONTEXT
     #{build_npc_context(npc)}
     
+    ## NPC MEMORY (CURRENT)
+    #{npc.memory}
+    
     ## YOUR TASK
-    1. Generate a detailed outcome description based on the dice result
+    1. Generate a succint outcome description based on the dice result
     2. Consider how success/failure affects the current situation
     3. Update player and NPC memories based on the outcome
     4. Generate a new situation that emerges from this outcome
@@ -499,17 +524,13 @@ def outcome_prompt(dice_result, current_situation, player, npc)
     - **SUCCESS**: The player's action achieves its intended goal, but may have unexpected consequences
     - **FAILURE**: The player's action doesn't achieve its goal, but may open new opportunities or create interesting complications
     
-    ## OUTPUT FORMAT
-    Please respond in the following JSON format:
+    ## OUTPUT FORMAT (JSON)
+    Respond with ONLY this JSON object (no prose):
     {
-      "outcome_description": "Detailed description of what happened as a result of the dice roll",
-      "consequences": {
-        "immediate": "What happens immediately",
-        "long_term": "Potential long-term effects or implications"
-      },
-      "atmosphere_change": "How the overall mood/tension has changed",
-      "player_memory_update": "How this experience affects the player's memory and understanding",
-      "npc_memory_update": "How this experience affects the NPC's memory and disposition"
+      "outcome_description": "MAX 3 sentences.Vivid novel like description of what happened as a result of the dice roll. Succint but descriptive.",
+      "updated_situation": "MAX 1 sentence.The new situation that emerges from this outcome. Focused on what could happen next.",
+      "updated_player_memory": "How this experience affects the player's memory and understanding",
+      "updated_npc_memory": "How this experience affects the NPC's memory and disposition"
     }
     
     ## IMPORTANT
@@ -517,5 +538,26 @@ def outcome_prompt(dice_result, current_situation, player, npc)
     - Consider the player's traits and how they might react to success/failure
     - The new situation should naturally flow from the outcome
     - Keep the story engaging and maintain narrative tension
+  PROMPT
+end
+
+
+def dice_prompt(player_choice, current_situation, player, npc)
+  <<~PROMPT
+    You are the Game Master (GM) determining the dice threshold for a player's choice in a text-based RPG.
+    4 outcomes: big success, success, small failure, big failure
+    and you are to generate the threshold for each outcome.
+
+    Out of dice of 20,
+    roll of big_success_threshold or higher is big success.
+    roll of success_threshold or higher is success.
+    roll of small_failure_threshold or higher is small failure.
+    roll below big_failure_threshold is big failure.
+    
+    ## PLAYER'S CHOICE
+    #{player_choice}
+    
+    ## CURRENT SITUATION
+    #{current_situation}
   PROMPT
 end
