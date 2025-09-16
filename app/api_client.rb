@@ -12,6 +12,7 @@ class APIClient
   def send_scene_request(args,prompt)
     puts "Sending scene generation request..."
     puts prompt
+    prompt = prompt + "\n 무조건 무조건 한국어로 생성하시오"
     @llm_client.send_request(args, "/scene", prompt)
   end
 
@@ -23,6 +24,7 @@ class APIClient
 
   def send_outcome_request(args,prompt)
     puts "Sending outcome request..."
+    prompt = prompt + "\n 무조건 무조건 한국어로 생성하시오"
     @llm_client.send_request(args, "/outcome", prompt)
   end
 
@@ -81,6 +83,19 @@ class APIClient
     if scene
       @game_state.start_new_scene(scene, args)
       @game_state.transition_to(:choice_phase)
+      # Orchestrate typing and focus for situation and choices
+      active_state = @game_state.get_active_state
+      if active_state
+        situation_text = active_state.text
+        choice_texts = active_state.choices.map { |c| c.text }
+        # Freeze clock until typing completes; reading_pause will be released when typing is done
+        @game_state.reading_pause[:active] = true
+        @game_state.reading_pause[:time_left] = 9999.0
+        @game_state.reading_pause[:state_id] = active_state.id
+        @game_state.reading_pause[:started_tick] = args.state.tick_count
+
+        args.state.sequencer.start_scene(situation_text, choice_texts)
+      end
     else
       puts "here 1"
       puts "Failed to parse scene data"
@@ -102,6 +117,7 @@ class APIClient
         reasoning: success_data[:reasoning],
         choice: (@game_state.selected_choice_text || "Unknown choice")
       }
+      puts "Success data: #{success_data}"
       
       # Show thresholds first; user will press SPACE to roll
       @game_state.transition_to(:dice_result)

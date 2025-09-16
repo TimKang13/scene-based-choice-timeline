@@ -12,9 +12,9 @@ class ChoiceManager
     return unless @game_state.get_current_state == :choice_phase
 
     # Block choice input during reading pause
-    if @game_state.reading_pause && @game_state.reading_pause[:active]
-      return
-    end
+    # if @game_state.reading_pause && @game_state.reading_pause[:active]
+    #   return
+    # end
 
     
     
@@ -47,6 +47,7 @@ class ChoiceManager
     @game_state.selected_choice_text = text
     # Transition to dice result phase
     @game_state.transition_to(:dice_result)
+    puts "Transitioning to dice result phase"
     
     # Request success criteria from API
     request_success_criteria(text, args)

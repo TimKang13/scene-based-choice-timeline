@@ -148,7 +148,7 @@ end
 
 def initial_outcome_prompt 
   <<~OUTCOME
-    There is still a tense standoff at the castle gate.
+    경비병과 플레이어가 성 밖에서 대치중이다.
   OUTCOME
 end
 

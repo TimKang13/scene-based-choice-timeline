@@ -2,7 +2,7 @@
 # app/game_state.rb
 
 class GameState
-  attr_accessor :game_state, :scene, :current_state, :player, :npc, :choices, :timing, :current_situation, :current_outcome, :dice_result, :api_response, :selected_choice_text, :reading_pause, :show_reasoning
+  attr_accessor :game_state, :scene, :current_state, :player, :npc, :choices, :timing, :current_situation, :current_outcome, :dice_result, :api_response, :selected_choice_text, :reading_pause, :show_reasoning, :typed_situation, :typed_choices, :focus_target, :focus_choice_index
 
   def initialize
     @game_state ||= :situation_explanation  # Game flow state (situation_explanation, scene_generation, etc.)
@@ -23,6 +23,10 @@ class GameState
     @selected_choice_text ||= nil
     @reading_pause ||= { active: false, time_left: 0.0, state_id: nil, started_tick: nil }
     @show_reasoning ||= false
+    @typed_situation ||= ""
+    @typed_choices ||= []
+    @focus_target ||= nil
+    @focus_choice_index ||= nil
   end
 
   # State machine transitions
@@ -43,6 +47,7 @@ class GameState
         paused_ticks = (args.state.tick_count - (@reading_pause[:started_tick] || args.state.tick_count))
         @timing[:scene_start_time] += paused_ticks
         @reading_pause[:active] = false
+        puts "Reading pause ended"
         @reading_pause[:time_left] = 0.0
         @reading_pause[:started_tick] = nil
       else
@@ -97,19 +102,8 @@ class GameState
 
     # If entering a new state, start that state's reading pause
     if @current_state && @current_state.id != prev_state_id
-      total_read = (@current_state.time_to_read || 0).to_f + visible_choices_read_time(@current_state)
-      if total_read > 0.0
-        @reading_pause[:active] = true
-        @reading_pause[:time_left] = total_read
-        @reading_pause[:state_id] = @current_state.id
-        # mark when pause starts to compensate scene_start_time later
-        @reading_pause[:started_tick] = @timing[:scene_start_time] + @timing[:current_time]
-      else
-        @reading_pause[:active] = false
-        @reading_pause[:time_left] = 0.0
-        @reading_pause[:state_id] = @current_state.id
-        @reading_pause[:started_tick] = nil
-      end
+      # Leave pause start to sequencer/typewriter which will freeze and release as needed
+      @reading_pause[:state_id] = @current_state.id
     end
 
     active_state

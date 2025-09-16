@@ -74,7 +74,8 @@ class LLMClient
     body = r[:response_data] || r[:response_body] || r[:body] || ""
     
     puts "Response code: #{code}"
-    puts "Response body: #{body.inspect}"
+    # Avoid .inspect here because it escapes UTF-8 into \x.. sequences
+    puts "Response body: #{body}"
     puts "Response body type: #{body.class}"
 
     # Clear the handle so it doesn't repeat
@@ -82,50 +83,46 @@ class LLMClient
 
     return nil unless code && code >= 200 && code < 300
 
-    # Your FastAPI returns {"response":"..."}
+    # Prefer proper JSON parsing to preserve UTF-8
     if body.is_a?(String)
-      # DragonRuby-compatible string parsing
-      if body.include?('"response"')
-        # Find the start of the response value
-        start_idx = body.index('"response"')
+      parsed = nil
+      begin
+        parsed = args.gtk.parse_json(body)
+      rescue
+        parsed = nil
+      end
+
+      if parsed && parsed.is_a?(Hash) && (parsed.key?('response') || parsed.key?(:response))
+        inner = parsed['response'] || parsed[:response]
+        return inner.is_a?(String) ? inner : inner.to_s
+      end
+
+      # Fallback to manual extraction if JSON parsing failed
+      if body.include?("\"response\"")
+        start_idx = body.index("\"response\"")
         if start_idx
-          # Find the colon after "response"
           colon_idx = body.index(':', start_idx)
           if colon_idx
-            # Find the opening quote after the colon
             quote_start = body.index('"', colon_idx)
             if quote_start
-              # Find the closing quote (handle escaped quotes)
               quote_end = quote_start + 1
               while quote_end < body.length
                 if body[quote_end] == '\\' && quote_end + 1 < body.length
-                  quote_end += 2  # Skip escaped character
+                  quote_end += 2
                 elsif body[quote_end] == '"'
                   break
                 else
                   quote_end += 1
                 end
               end
-              if quote_end < body.length
-                # Extract the response content
-                body[quote_start + 1...quote_end]
-              else
-                body
-              end
-            else
-              body
+              return body[quote_start + 1...quote_end] if quote_end < body.length
             end
-          else
-            body
           end
-        else
-          body
         end
-      else
-        body
       end
+      return body
     else
-      body.to_s
+      return body.to_s
     end
   end
 end

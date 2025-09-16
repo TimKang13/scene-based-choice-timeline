@@ -5,6 +5,9 @@ require "app/scene_renderer"
 require "app/client"
 require "app/api_client"
 require "app/choice_manager"
+require "app/typewriter"
+require "app/focus_mask"
+require "app/sequencer"
 require "app/prompts"
 
 def tick(args)
@@ -26,6 +29,9 @@ def init(args)
   args.state.scene_renderer ||= SceneRenderer.new
   args.state.api_client ||= APIClient.new(args.state.game_state)
   args.state.choice_manager ||= ChoiceManager.new(args.state.game_state, args.state.api_client)
+  args.state.typewriter ||= Typewriter.new(args.state.game_state)
+  args.state.focus_mask ||= FocusMask.new(args.state.game_state)
+  args.state.sequencer ||= Sequencer.new(args.state.game_state, args.state.typewriter)
   
   # Initialize player and NPC
   initialize_player_and_npc(args.state.game_state)
@@ -35,12 +41,16 @@ def init(args)
   args.state.game_state.current_outcome = initial_outcome_prompt
   puts " current situation: #{args.state.game_state.current_situation}"
   args.state.game_state.transition_to(:situation_explanation)
+  # Kick off typing of situation text (blur others)
+  args.state.game_state.focus_target = :situation
+  args.state.typewriter.start_situation(args.state.game_state.current_situation)
   
   puts "Game initialized successfully"
 end
 
 def update(args)
   game_state = args.state.game_state
+  typewriter = args.state.typewriter
   
   # Global toggle for reasoning visibility
   if args.inputs.keyboard.key_down.r
@@ -61,6 +71,8 @@ def update(args)
   when :scene_generation
     # Scene generation is handled by API response
   when :choice_phase
+    # Drive state change rewrites and input
+    maybe_drive_state_typing(args)
     handle_choice_phase_input(args)
   when :dice_result
     handle_dice_result_input(args)
@@ -70,6 +82,43 @@ def update(args)
   
   # Handle timeouts
   handle_timeouts(args)
+
+  # Advance typewriter and sequencer
+  args.state.typewriter.tick(args)
+  args.state.sequencer.tick(args)
+end
+
+def maybe_drive_state_typing(args)
+  game_state = args.state.game_state
+  typewriter = args.state.typewriter
+  sequencer = args.state.sequencer
+
+  state = game_state.get_active_state
+  return unless state
+
+  # If clock is not frozen and typing not underway, start rewrite for situation/choices when state changes
+  if game_state.reading_pause && !game_state.reading_pause[:active] && !typewriter.busy?
+    # Freeze until typing completes
+    game_state.reading_pause[:active] = true
+    game_state.reading_pause[:time_left] = 9999.0
+    game_state.reading_pause[:state_id] = state.id
+    game_state.reading_pause[:started_tick] = args.state.tick_count
+
+    # Situation rewrite from current typed to new state text
+    sequencer.rewrite_situation(game_state.typed_situation, state.text)
+
+    # Choices selective rewrite
+    old = game_state.typed_choices || []
+    new = (state.choices || []).map { |c| c.text }
+    max_len = [old.length, new.length].max
+    (0...max_len).each do |i|
+      old_text = old[i] || ""
+      new_text = new[i] || ""
+      next if old_text == new_text
+      sequencer.rewrite_choice(i, old_text, new_text)
+      break # rewrite one at a time to keep focus clear
+    end
+  end
 end
 
 def render(args)
@@ -134,6 +183,11 @@ def handle_situation_explanation_input(args)
     puts "prompt: #{prompt}"
     args.state.api_client.send_scene_request(args, prompt)
   end
+
+  # Skip typing with space while in situation explanation before API call
+  if args.state.typewriter && args.state.typewriter.busy? && args.inputs.keyboard.key_down.space
+    args.state.typewriter.finish_now!
+  end
 end
 
 def handle_choice_phase_input(args)
@@ -141,6 +195,11 @@ def handle_choice_phase_input(args)
   choice_manager = args.state.choice_manager
   
   choice_manager.handle_input(args)
+
+  # Allow fast-completing typing with space
+  if args.state.typewriter && args.state.typewriter.busy? && args.inputs.keyboard.key_down.space
+    args.state.typewriter.finish_now!
+  end
 end
 
 def handle_outcome_input(args)
