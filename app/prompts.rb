@@ -127,9 +127,9 @@ def build_player_context(player)
     Species: #{player.species}
     
     Stats:
-    - Body/Physical: #{player.stats.physical}/20
-    - Intelligence: #{player.stats.intelligence}/20  
-    - Speech/Charisma: #{player.stats.speech}/20
+    - 신체: #{player.stats.physical}/20
+    - 지능: #{player.stats.intelligence}/20  
+    - 언변: #{player.stats.speech}/20
     
     Traits: #{player.traits.map { |t| "#{t.name} (#{t.intensity})" }.join(", ")}
   CONTEXT
@@ -154,21 +154,19 @@ end
 
 def initial_situation_prompt
   <<~SITUATION
-    There is a tense standoff at the castle gate.
+      성문 앞에서 긴장된 대치 상황이 벌어지고 있다.
     
-    A traveler (player) wants to enter the castle, but a guard is blocking them.
-    The guard demands identification or entry permit, but the traveler doesn't have them.
+    한 명의 여행자(플레이어)가 성안으로 들어가려고 하지만, 문지기가 이를 막고 있다.
+    문지기는 신분증이나 입성 허가서를 요구했지만, 여행자는 그런 것을 가지고 있지 않다.
     
-    The traveler emphasizes they are harmless, but gives vague answers to the guard's questions.
-    Particularly, their answers about "where they came from" and "what they want to do in the castle" were unclear.
+    여행자는 자신이 무해하다고 강조했지만, 문지기의 질문들에 대해 모호하게 대답했다.
+    특히 "어디서 왔는지", "성안에서 무엇을 하려는지"에 대한 답변이 불분명했다.
     
-    The guard becomes more suspicious of this vague behavior and raises their spear in defense.
-    The traveler looks surprised but still doesn't back down.
+    문지기는 이런 모호한 행동에 더욱 의심을 품게 되었고, 창을 들어 방어 자세를 취했다.
+    여행자는 놀란 표정을 지었지만, 여전히 물러서지 않았다.
     
-    The current situation is very tense, and the guard is ready to attack.
-    The traveler cannot back down because they have urgent business inside the castle.
-    
-    This standoff could lead to violence at any moment.
+    현재 상황은 매우 긴장되어 있으며, 문지기가 공격할 준비가 되어 있다.
+    여행자도 성안에 들어가야 하는 이유가 있어서 물러설 수 없는 상황이다.
   SITUATION
 end
 
@@ -199,7 +197,6 @@ def scene_generation_prompt
   <<~PROMPT
     Given the current situation and narrative, generate a new SCENE with meaningful choices for the player.
 
-
     ## SCENE STRUCTURE
     - SCENE: A single decision point with duration 5-20 seconds
     - STATE: A micro situation within the scene (usually 1 state for simple scenes)
@@ -226,8 +223,8 @@ def scene_generation_prompt
     ## REQUIREMENTS
     1. Create 3-7 creative, intuitive choices
     2. **CRITICAL**: Player has only 5 seconds to read state text, understand choices, and decide
-    3. State text must be extremely concise - maximum 10-15 words
-    4. Choice text must be under 5 words - direct action verbs preferred
+    3. State should be a sentence. must be concise but specific - maximum 10-15 words
+    4. Choice text must be under 5 words - direct action verbs preferred, with specific objective and target subjects
     5. Consider player stats (Physical, Intelligence, Speech) and traits
     6. Make choices advance the story and build tension
     7. Ensure timing makes sense for the situation
@@ -270,25 +267,25 @@ def scene_generation_prompt
       "choices": [
         {
           "id": "choice_1",
-          "text": "Try to talk your way past",
+          "text": "(재밌는 선택)",
           "state_ids": ["state_1", "state_2"],
           "time_to_read": 0.6
         },
         {
           "id": "choice_2",
-          "text": "Run away quickly",
+          "text": "(침착한 선택)",
           "state_ids": ["state_2", "state_3"],
           "time_to_read": 0.5
         },
         {
           "id": "choice_3",
-          "text": "Fight back",
+          "text": "(정석 선택)",
           "state_ids": ["state_1", "state_2", "state_3"],
           "time_to_read": 0.4
         },
         {
           "id": "choice_4",
-          "text": "Dodge the spear",
+          "text": "(아이템 사용 선택)",
           "state_ids": ["state_3"],
           "time_to_read": 0.5
         }
@@ -306,16 +303,16 @@ def scene_generation_prompt
       - Prohibited in state text: "you", "your", "player", second-person imperatives (e.g., "Dodge", "Grab", "Speak"), or any verb implying player action.
       - Use third-person subjects like "Guard", "Crowd", "Gate", "Spear", "Wind", "Rain".
       - Think of states as the "background reel" that plays if the player does nothing.
-      - Bad (NOT allowed): "You step back. You ready your blade."
-      - Good (Allowed): "Guard steps in. Spear lifts higher. Crowd hushes."
+      - Bad (NOT allowed): "You step back and ready your blade."
+      - Good (Allowed): "Guard steps in and lifts their spear higher. Crowd hushes."
 
     - Use short, punchy sentences. No flowery descriptions.
     - Focus on immediate threats, actions, and consequences
     - States no longer contain choices directly - choices are assigned via state_ids
     - Example state progression:
-      state 1 (0s): "Guard blocks path. Spear raised. Demands ID."
-      state 2 (5s): "Guard steps closer. Final warning. Spear tip glints."
-      state 3 (10s): "Guard lunges! Spear thrusts toward you. NOW!"
+      state 1: "Guard blocks path. Spear raised. Demands ID."
+      state 2: "Guard steps closer. Final warning. Spear tip glints."
+      state 3: "Guard lunges! Spear thrusts toward you. NOW!"
 
     ### SELF-CHECK BEFORE OUTPUT
     For each state.text, verify ALL are true; if any fail, rewrite before returning JSON:
@@ -325,14 +322,14 @@ def scene_generation_prompt
 
     ## CHOICE GUIDELINES
     - **CRITICAL**: Choice text must be under 5 words - direct action verbs preferred. be specific, succint, packed with action
-    - Make each choice distinct and meaningful
-    - Consider player's traits and stats
+    - Make each choice distinct and memorable
+    - Consider player's traits and stats...!
+    - Item usage is fun! Good to include
     - Each choice should have clear risk/reward dynamics
     - **CRITICAL**: Choices are defined at the scene level and assigned to states via state_ids
     - Choices can span multiple states for better persistence and player agency
-    - Each choice should be contextually appropriate for ALL states it's assigned to
+    - Each choice should be contextually appropriate for states it's assigned to
     - Certain specific choices may only be available in specific states (single state_ids)
-    - With choice, you can use items as well.
     Create creative and engaging choices that make sense across their assigned states.
     You are the DM! Make absurd and unorthodox choices to blow people's minds.
   PROMPT

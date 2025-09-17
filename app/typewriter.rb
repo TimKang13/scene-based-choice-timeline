@@ -5,7 +5,7 @@ class Typewriter
   def initialize(game_state)
     @game_state = game_state
     @default_cps = 25.0  # Keep original typing speed
-    @delete_cps = 35.0   # Much faster for erasing
+    @delete_cps = 55.0   # Much faster for erasing
     reset_job
   end
 
