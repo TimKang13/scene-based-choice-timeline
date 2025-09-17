@@ -84,7 +84,7 @@ class ChoiceManager
   end
 
   def request_success_criteria(choice_text, args)
-    decision_time_seconds = (@game_state.timing[:current_time] || 0) / 60.0
+    decision_time_seconds = (@game_state.time && @game_state.time.scene_time_seconds) || 0.0
     prompt = success_criteria_prompt(
       choice_text,
       @game_state.get_current_situation,

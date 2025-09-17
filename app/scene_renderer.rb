@@ -75,10 +75,7 @@ class SceneRenderer
       end
     end
 
-    # Render reading pause countdown overlay if active
-    if @game_state.reading_pause && @game_state.reading_pause[:active]
-      # render_reading_pause_overlay
-    end
+    # No reading window overlay in simplified timing model
 
     # Render time bar
     render_time_bar
@@ -175,31 +172,29 @@ class SceneRenderer
     }
     
     # Progress bar (frozen while reading pause is active since current_time is frozen)
-    progress = [@game_state.timing[:current_time] / @game_state.timing[:scene_duration], 1.0].min
+    duration = (@game_state.scene && @game_state.scene.duration) ? @game_state.scene.duration.to_f : 0.0
+    current = @game_state.time ? @game_state.time.scene_time_seconds : 0.0
+    progress = duration > 0.0 ? [current / duration, 1.0].min : 0.0
     progress_width = bar_width * progress
     
     @outputs.solids << { x: bar_x, y: bar_y, w: progress_width, h: bar_height, r: 180, g: 180, b: 180 }
     
-    # State change markers removed for minimal UI
+    # Active state end marker: draw a thin vertical bar where the current state ends
+    if duration > 0.0
+      active_state = @game_state.get_active_state
+      if active_state
+        state_end_time = (active_state.at.to_f + active_state.duration.to_f)
+        state_end_time = duration if state_end_time > duration
+        ratio = state_end_time / duration
+        marker_x = (bar_x + (bar_width * ratio)).to_i
+        @outputs.solids << { x: marker_x - 1, y: bar_y - 2, w: 2, h: bar_height + 4, r: 255, g: 80, b: 80 }
+      end
+    end
     
-    # Time text
-    current_time_seconds = @game_state.timing[:current_time] / 60.0
-    scene_duration_seconds = @game_state.timing[:scene_duration] / 60.0
-    time_text = "#{current_time_seconds.to_i}s / #{scene_duration_seconds.to_i}s"
-    @outputs.labels << {
-      x: 640, y: bar_y + 30, text: time_text, 
-      size_enum: 1, alignment_enum: 1, r: 255, g: 255, b: 255
-    }
+    # Time text removed per minimal UI
   end
 
-  # def render_reading_pause_overlay
-  #   # Dim background
-  #   @outputs.solids << { x: 0, y: 0, w: 1280, h: 720, r: 0, g: 0, b: 0, a: 128 }
-  #   time_left = [@game_state.reading_pause[:time_left], 0.0].max
-  #   seconds_left = time_left.ceil
-  #   @outputs.labels << { x: 640, y: 450, text: "Get ready...", size_enum: 4, alignment_enum: 1, r: 255, g: 255, b: 0 }
-  #   @outputs.labels << { x: 640, y: 420, text: "#{seconds_left}", size_enum: 7, alignment_enum: 1, r: 255, g: 255, b: 255 }
-  # end
+  # Reading window overlay removed
 
   def render_choices(choices)
     return if choices.empty?
@@ -226,17 +221,18 @@ class SceneRenderer
   end
 
   def render_choices_with_typing(choices)
-    return if choices.empty?
+    slots = (@game_state.typed_choices || [])
+    return if slots.empty?
+
     start_y = 340
     choice_height = 40
     spacing = 10
 
-    choices.each_with_index do |choice, index|
+    slots.each_with_index do |typed, index|
       y_pos = start_y - (index * (choice_height + spacing))
 
       @outputs.solids << { x: 240, y: y_pos, w: 800, h: choice_height, r: 60, g: 60, b: 60 }
 
-      typed = @game_state.typed_choices && @game_state.typed_choices[index]
       if typed && !typed.empty?
         @outputs.labels << { x: 640, y: y_pos + choice_height / 2 + 5, text: "#{index + 1}. #{typed}", size_enum: 2, alignment_enum: 1, r: 255, g: 255, b: 255, font: "NotoSerifKR-VariableFont_wght.ttf" }
       end

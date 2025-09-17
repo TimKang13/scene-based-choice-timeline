@@ -88,13 +88,10 @@ class APIClient
       if active_state
         situation_text = active_state.text
         choice_texts = active_state.choices.map { |c| c.text }
-        # Freeze clock until typing completes; reading_pause will be released when typing is done
-        @game_state.reading_pause[:active] = true
-        @game_state.reading_pause[:time_left] = 9999.0
-        @game_state.reading_pause[:state_id] = active_state.id
-        @game_state.reading_pause[:started_tick] = args.state.tick_count
-
+        # Freeze scene time until initial typing completes; resume handled by Sequencer when typing done
+        @game_state.time.pause
         args.state.sequencer.start_scene(situation_text, choice_texts)
+        @game_state.last_handled_state_id = active_state.id
       end
     else
       puts "here 1"

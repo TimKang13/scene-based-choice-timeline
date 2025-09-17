@@ -96,27 +96,17 @@ def maybe_drive_state_typing(args)
   state = game_state.get_active_state
   return unless state
 
-  # If clock is not frozen and typing not underway, start rewrite for situation/choices when state changes
-  if game_state.reading_pause && !game_state.reading_pause[:active] && !typewriter.busy?
-    # Freeze until typing completes
-    game_state.reading_pause[:active] = true
-    game_state.reading_pause[:time_left] = 9999.0
-    game_state.reading_pause[:state_id] = state.id
-    game_state.reading_pause[:started_tick] = args.state.tick_count
+  # If entering a new state, immediately pause scene time; when typewriter is free, queue full rewrites
+  if state && game_state.last_handled_state_id != state.id
+    game_state.time.pause unless game_state.time.paused?
 
-    # Situation rewrite from current typed to new state text
-    sequencer.rewrite_situation(game_state.typed_situation, state.text)
-
-    # Choices selective rewrite
-    old = game_state.typed_choices || []
-    new = (state.choices || []).map { |c| c.text }
-    max_len = [old.length, new.length].max
-    (0...max_len).each do |i|
-      old_text = old[i] || ""
-      new_text = new[i] || ""
-      next if old_text == new_text
-      sequencer.rewrite_choice(i, old_text, new_text)
-      break # rewrite one at a time to keep focus clear
+    unless typewriter.busy?
+      old_situation = game_state.typed_situation
+      new_situation = state.text
+      old_choices = game_state.typed_choices || []
+      new_choices = (state.choices || []).map { |c| c.text }
+      sequencer.begin_state_transition(old_situation, new_situation, old_choices, new_choices)
+      game_state.last_handled_state_id = state.id
     end
   end
 end
